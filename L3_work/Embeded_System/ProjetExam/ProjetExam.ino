@@ -109,7 +109,7 @@ void gererBluetooth() {
     char cmd = Serial.read();
     if (cmd == '0') appelEtage = 0;
     else if (cmd == '1') appelEtage = 1;
-    else if (cmd == '2') appelEtage = 2;
+    else if (cmd == '2') appelEtage = 2; 
   }
 }
 
@@ -123,6 +123,7 @@ void deplacerCabine(int destination) {
   lcd1.clear(); lcd1.setCursor(0, 0); lcd1.print(texte);
   lcd2.clear(); lcd2.setCursor(0, 0); lcd2.print(texte);
   lcd3.clear(); lcd3.setCursor(0, 0); lcd3.print(texte);
+  Serial.println(texte);
 
   // Direction du moteur
   if (destination > etageActuel) {
@@ -169,6 +170,7 @@ void afficherEtage() {
   lcd1.clear(); lcd1.setCursor(0, 0); lcd1.print(texte);
   lcd2.clear(); lcd2.setCursor(0, 0); lcd2.print(texte);
   lcd3.clear(); lcd3.setCursor(0, 0); lcd3.print(texte);
+  Serial.println(texte);  //Affichage dans l'application bluethooth
 }
 
 void arretEtOuverture() {
@@ -176,16 +178,18 @@ void arretEtOuverture() {
   delay(500);
 
   // Ouvrir porte uniquement si pas d’obstacle
-  if (digitalRead(capteurObstacle) == HIGH) {
+  if (digitalRead(capteurObstacle) == LOW) {
     lcd1.clear(); lcd1.setCursor(0, 0); lcd1.print("Porte Ouverte");
     lcd2.clear(); lcd2.setCursor(0, 0); lcd2.print("Porte Ouverte");
     lcd3.clear(); lcd3.setCursor(0, 0); lcd3.print("Porte Ouverte");
+    Serial.println("Porte Ouverte");
     servoPorte.write(90);  // porte ouverte
     delay(2000);           // temps ouvert
     servoPorte.write(0);   // refermer
-    lcd1.clear(); lcd1.setCursor(0, 0); lcd1.print("Porte Fermee");
-    lcd2.clear(); lcd2.setCursor(0, 0); lcd2.print("Porte Fermee");
-    lcd3.clear(); lcd3.setCursor(0, 0); lcd3.print("Porte Fermee");
+    lcd1.clear(); lcd1.setCursor(0, 0); lcd1.print("Porte Fermée");
+    lcd2.clear(); lcd2.setCursor(0, 0); lcd2.print("Porte Fermée");
+    lcd3.clear(); lcd3.setCursor(0, 0); lcd3.print("Porte Fermée");
+    Serial.println("Porte Fermée");
   } else {
     // Clignote pour montrer obstacle
     for (int i = 0; i < 5; i++) {
