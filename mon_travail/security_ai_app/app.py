@@ -10,9 +10,15 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import streamlit as st
 import numpy as np
 import torch
-from ultralytics import YOLO
 from tensorflow.keras.models import load_model
 import base64
+try:
+    from ultralytics import YOLO
+except Exception as e:
+    import streamlit as st
+    st.error("Erreur de chargement du modèle YOLO")
+    st.exception(e)
+    st.stop()
 
 # ===============================
 # Cloud detection
