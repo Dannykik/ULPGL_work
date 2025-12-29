@@ -1,33 +1,32 @@
 # ===============================
-# Fix OpenMP conflict (PyTorch + TensorFlow on Windows)
+# Fix OpenMP conflict
 # ===============================
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 # ===============================
-# Imports
+# Imports de base
 # ===============================
 import streamlit as st
 import numpy as np
-import torch
-from tensorflow.keras.models import load_model
 import base64
-try:
-    from ultralytics import YOLO
-except Exception as e:
-    import streamlit as st
-    st.error("Erreur de chargement du modèle YOLO")
-    st.exception(e)
-    st.stop()
+import tempfile
+from tensorflow.keras.models import load_model
 
 # ===============================
-# Cloud detection
+# Détection Streamlit Cloud
 # ===============================
 IS_CLOUD = os.environ.get("STREAMLIT_SERVER_RUNNING") == "true"
 
+# ===============================
+# Imports conditionnels (cv2 & YOLO)
+# ===============================
+cv2 = None
+YOLO = None
+
 if not IS_CLOUD:
     import cv2
-
+    from ultralytics import YOLO
 
 # ===============================
 # CONFIGURATION PAGE
@@ -39,11 +38,14 @@ st.set_page_config(
 )
 
 # ===============================
-# BACKGROUND IMAGE (CSS)
+# BACKGROUND IMAGE
 # ===============================
 def get_base64_image(path):
-    with open(path, "rb") as img:
-        return base64.b64encode(img.read()).decode()
+    try:
+        with open(path, "rb") as img:
+            return base64.b64encode(img.read()).decode()
+    except FileNotFoundError:
+        return ""
 
 bg_image = get_base64_image("assets/background.png")
 
@@ -56,12 +58,12 @@ st.markdown(
             url("data:image/png;base64,{bg_image}");
         background-size: cover;
         background-position: center;
-        background-repeat: no-repeat;
     }}
 
     .main-container {{
         padding: 4rem;
         max-width: 900px;
+        margin: auto;
     }}
 
     .title {{
@@ -74,16 +76,14 @@ st.markdown(
         font-size: 20px;
         color: #d1d5db;
         margin-top: 12px;
-        line-height: 1.6;
     }}
 
     .badge {{
-        display: inline-block;
         background-color: rgba(59,130,246,0.2);
         color: #93c5fd;
         padding: 6px 16px;
         border-radius: 20px;
-        font-size: 14px;
+        display: inline-block;
         margin-bottom: 20px;
     }}
 
@@ -91,7 +91,6 @@ st.markdown(
         background: rgba(0,0,0,0.55);
         padding: 20px;
         border-radius: 12px;
-        margin-top: 15px;
         color: white;
     }}
     </style>
@@ -104,39 +103,35 @@ st.markdown(
 # ===============================
 @st.cache_resource
 def load_models():
-    weapon_model = YOLO("models/yolov8_weapon.pt")
-    anomaly_model = load_model(
-        "models/autoencoder_ucsd.h5",
-        compile=False
-    )
+    anomaly_model = load_model("models/autoencoder_ucsd.h5", compile=False)
+
+    weapon_model = None
+    if not IS_CLOUD:
+        weapon_model = YOLO("models/yolov8_weapon.pt")
+
     return weapon_model, anomaly_model
 
 weapon_model, anomaly_model = load_models()
 
 # ===============================
-# FONCTION SCORE D'ANOMALIE
+# SCORE D'ANOMALIE
 # ===============================
-def compute_anomaly_score(frame, model):
-    frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    frame_resized = cv2.resize(frame_gray, (128, 128))
-    frame_norm = frame_resized / 255.0
-    frame_input = frame_norm.reshape(1, 128, 128, 1)
+def compute_anomaly_score(frame):
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    resized = cv2.resize(gray, (128, 128))
+    norm = resized / 255.0
+    inp = norm.reshape(1, 128, 128, 1)
 
-    reconstructed = model.predict(frame_input, verbose=0)
-    mse = np.mean((frame_input - reconstructed) ** 2)
-    return mse
+    recon = anomaly_model.predict(inp, verbose=0)
+    return np.mean((inp - recon) ** 2)
 
 # ===============================
-# INTERFACE PRINCIPALE
+# INTERFACE
 # ===============================
 st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
-st.markdown('<div class="badge">🛡️ Système de vidéosurveillance intelligente</div>', unsafe_allow_html=True)
-
-st.markdown(
-    '<div class="title">Intelligent Video Surveillance System</div>',
-    unsafe_allow_html=True
-)
+st.markdown('<div class="badge">🛡️ Vidéosurveillance intelligente</div>', unsafe_allow_html=True)
+st.markdown('<div class="title">Intelligent Video Surveillance System</div>', unsafe_allow_html=True)
 
 st.markdown(
     """
@@ -149,11 +144,12 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-col1, col2 = st.columns(2)
-with col1:
-    start = st.button("▶️ Démarrer la surveillance")
-with col2:
-    stop = st.button("⛔ Arrêter")
+st.markdown("---")
+
+uploaded_video = st.file_uploader(
+    "📂 Charger une vidéo de surveillance",
+    type=["mp4", "avi", "mov"]
+)
 
 frame_placeholder = st.empty()
 info_placeholder = st.empty()
@@ -161,66 +157,55 @@ info_placeholder = st.empty()
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ===============================
-# CAPTURE WEBCAM
+# TRAITEMENT VIDÉO
 # ===============================
+if uploaded_video is not None:
 
-if IS_CLOUD:
-    st.warning("⚠️ La webcam n’est pas disponible sur Streamlit Cloud. Veuillez utiliser une vidéo.")
+    if cv2 is None:
+        st.error("OpenCV indisponible sur cette plateforme.")
+        st.stop()
 
-if start and not IS_CLOUD:
-    cap = cv2.VideoCapture(0)
+    tfile = tempfile.NamedTemporaryFile(delete=False)
+    tfile.write(uploaded_video.read())
+
+    cap = cv2.VideoCapture(tfile.name)
 
     while cap.isOpened():
         ret, frame = cap.read()
-        if not ret or stop:
+        if not ret:
             break
 
-        # -------------------------
-        # DÉTECTION OBJETS DANGEREUX
-        # -------------------------
-        results = weapon_model(frame, conf=0.4)
         weapon_detected = False
 
-        for r in results:
-            for box in r.boxes:
-                weapon_detected = True
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                cv2.putText(
-                    frame,
-                    "Objet Dangereux",
-                    (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (255, 0, 0),
-                    2
-                )
+        # -------------------------
+        # YOLO (si dispo)
+        # -------------------------
+        if weapon_model is not None:
+            results = weapon_model(frame, conf=0.4)
+            for r in results:
+                for box in r.boxes:
+                    weapon_detected = True
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
 
         # -------------------------
-        # DÉTECTION ANOMALIE
+        # Anomalie
         # -------------------------
-        anomaly_score = compute_anomaly_score(frame, anomaly_model)
+        anomaly_score = compute_anomaly_score(frame)
         anomaly_detected = anomaly_score > 0.02
 
         # -------------------------
-        # FUSION DES DÉCISIONS
+        # Décision
         # -------------------------
         if weapon_detected and anomaly_detected:
-            status = "🔴 MENACE CRITIQUE"
-            color = "red"
+            status, color = "🔴 MENACE CRITIQUE", "red"
         elif weapon_detected:
-            status = "🟠 OBJET DANGEREUX DÉTECTÉ"
-            color = "orange"
+            status, color = "🟠 OBJET DANGEREUX", "orange"
         elif anomaly_detected:
-            status = "🟡 ANOMALIE COMPORTEMENTALE"
-            color = "yellow"
+            status, color = "🟡 ANOMALIE", "yellow"
         else:
-            status = "🟢 SITUATION NORMALE"
-            color = "lightgreen"
+            status, color = "🟢 NORMAL", "lightgreen"
 
-        # -------------------------
-        # AFFICHAGE
-        # -------------------------
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_placeholder.image(frame_rgb, channels="RGB")
 
@@ -228,7 +213,7 @@ if start and not IS_CLOUD:
             f"""
             <div class="status-box">
                 <h3>📊 État du système</h3>
-                <p><b>Statut :</b> <span style="color:{color}; font-weight:bold">{status}</span></p>
+                <p><b>Statut :</b> <span style="color:{color}">{status}</span></p>
                 <p><b>Score anomalie :</b> {anomaly_score:.5f}</p>
             </div>
             """,
@@ -236,4 +221,3 @@ if start and not IS_CLOUD:
         )
 
     cap.release()
-    cv2.destroyAllWindows()
