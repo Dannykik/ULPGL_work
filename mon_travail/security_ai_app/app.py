@@ -150,6 +150,9 @@ st.markdown('</div>', unsafe_allow_html=True)
 # CAPTURE WEBCAM
 # ===============================
 IS_CLOUD = os.environ.get("STREAMLIT_SERVER_RUNNING") == "true"
+if IS_CLOUD:
+    st.warning("⚠️ La webcam n’est pas disponible sur Streamlit Cloud. Veuillez utiliser une vidéo.")
+
 if start and not IS_CLOUD:
     cap = cv2.VideoCapture(0)
 
