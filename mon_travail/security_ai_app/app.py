@@ -8,12 +8,20 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 # Imports
 # ===============================
 import streamlit as st
-import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
 from tensorflow.keras.models import load_model
 import base64
+
+# ===============================
+# Cloud detection
+# ===============================
+IS_CLOUD = os.environ.get("STREAMLIT_SERVER_RUNNING") == "true"
+
+if not IS_CLOUD:
+    import cv2
+
 
 # ===============================
 # CONFIGURATION PAGE
@@ -149,7 +157,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 # ===============================
 # CAPTURE WEBCAM
 # ===============================
-IS_CLOUD = os.environ.get("STREAMLIT_SERVER_RUNNING") == "true"
+
 if IS_CLOUD:
     st.warning("⚠️ La webcam n’est pas disponible sur Streamlit Cloud. Veuillez utiliser une vidéo.")
 
