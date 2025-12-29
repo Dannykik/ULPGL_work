@@ -3,6 +3,6 @@ numpy
 torch
 torchvision
 ultralytics
-tensorflow
+tensorflow-cpu
 opencv-python-headless
 Pillow
