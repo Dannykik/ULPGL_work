@@ -149,7 +149,8 @@ st.markdown('</div>', unsafe_allow_html=True)
 # ===============================
 # CAPTURE WEBCAM
 # ===============================
-if start:
+IS_CLOUD = os.environ.get("STREAMLIT_SERVER_RUNNING") == "true"
+if start and not IS_CLOUD:
     cap = cv2.VideoCapture(0)
 
     while cap.isOpened():
