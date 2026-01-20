@@ -19,7 +19,7 @@ from tensorflow.keras.models import load_model
 IS_CLOUD = os.environ.get("STREAMLIT_SERVER_RUNNING") == "true"
 
 # ===============================
-# Imports conditionnels (cv2 & YOLO)
+# Imports conditionnels
 # ===============================
 cv2 = None
 YOLO = None
@@ -44,7 +44,7 @@ def get_base64_image(path):
     try:
         with open(path, "rb") as img:
             return base64.b64encode(img.read()).decode()
-    except FileNotFoundError:
+    except:
         return ""
 
 bg_image = get_base64_image("assets/background.png")
@@ -67,15 +67,14 @@ st.markdown(
     }}
 
     .title {{
-        font-size: 46px;
+        font-size: 42px;
         font-weight: 800;
         color: white;
     }}
 
     .subtitle {{
-        font-size: 20px;
+        font-size: 18px;
         color: #d1d5db;
-        margin-top: 12px;
     }}
 
     .badge {{
@@ -83,8 +82,8 @@ st.markdown(
         color: #93c5fd;
         padding: 6px 16px;
         border-radius: 20px;
-        display: inline-block;
         margin-bottom: 20px;
+        display: inline-block;
     }}
 
     .status-box {{
@@ -121,7 +120,6 @@ def compute_anomaly_score(frame):
     resized = cv2.resize(gray, (128, 128))
     norm = resized / 255.0
     inp = norm.reshape(1, 128, 128, 1)
-
     recon = anomaly_model.predict(inp, verbose=0)
     return np.mean((inp - recon) ** 2)
 
@@ -131,93 +129,119 @@ def compute_anomaly_score(frame):
 st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
 st.markdown('<div class="badge">🛡️ Vidéosurveillance intelligente</div>', unsafe_allow_html=True)
-st.markdown('<div class="title">Intelligent Video Surveillance System</div>', unsafe_allow_html=True)
-
-st.markdown(
-    """
-    <div class="subtitle">
-        Université Libre des Pays des Grands Lacs (ULPGL)<br>
-        Faculté des Sciences et Technologies<br>
-        Projet académique – Mémoire L3
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown('<div class="title">AMANI KWETU – Intelligent Video Surveillance</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Sécurité – Région des Grands Lacs (Goma)</div>', unsafe_allow_html=True)
 
 st.markdown("---")
 
-uploaded_video = st.file_uploader(
-    "📂 Charger une vidéo de surveillance",
-    type=["mp4", "avi", "mov"]
+# ===============================
+# CHOIX SOURCE VIDÉO
+# ===============================
+video_source = st.selectbox(
+    "🎥 Choisir la source vidéo",
+    ["📁 Vidéo enregistrée", "📷 Webcam (temps réel)", "🌐 Caméra IP (RTSP)"]
 )
+
+uploaded_video = None
+camera_url = None
+
+if video_source == "📁 Vidéo enregistrée":
+    uploaded_video = st.file_uploader(
+        "Charger une vidéo",
+        type=["mp4", "avi", "mov"]
+    )
+
+elif video_source == "🌐 Caméra IP (RTSP)":
+    camera_url = st.text_input(
+        "URL caméra IP",
+        placeholder="rtsp://user:password@ip:port/stream"
+    )
 
 frame_placeholder = st.empty()
 info_placeholder = st.empty()
+stop_button = st.button("⛔ Arrêter la surveillance")
 
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ===============================
-# TRAITEMENT VIDÉO
+# OUVERTURE SOURCE VIDÉO
 # ===============================
-if uploaded_video is not None:
+cap = None
 
-    if cv2 is None:
-        st.error("OpenCV indisponible sur cette plateforme.")
-        st.stop()
-
+if video_source == "📁 Vidéo enregistrée" and uploaded_video:
     tfile = tempfile.NamedTemporaryFile(delete=False)
     tfile.write(uploaded_video.read())
-
     cap = cv2.VideoCapture(tfile.name)
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+elif video_source == "📷 Webcam (temps réel)":
+    if IS_CLOUD:
+        st.error("Webcam indisponible sur Streamlit Cloud.")
+        st.stop()
+    cap = cv2.VideoCapture(0)
 
-        weapon_detected = False
+elif video_source == "🌐 Caméra IP (RTSP)" and camera_url:
+    cap = cv2.VideoCapture(camera_url)
 
-        # -------------------------
-        # YOLO (si dispo)
-        # -------------------------
-        if weapon_model is not None:
-            results = weapon_model(frame, conf=0.4)
-            for r in results:
-                for box in r.boxes:
-                    weapon_detected = True
-                    x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+if cap is None or not cap.isOpened():
+    st.warning("Veuillez sélectionner une source vidéo valide.")
+    st.stop()
 
-        # -------------------------
-        # Anomalie
-        # -------------------------
-        anomaly_score = compute_anomaly_score(frame)
-        anomaly_detected = anomaly_score > 0.02
+cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-        # -------------------------
-        # Décision
-        # -------------------------
-        if weapon_detected and anomaly_detected:
-            status, color = "🔴 MENACE CRITIQUE", "red"
-        elif weapon_detected:
-            status, color = "🟠 OBJET DANGEREUX", "orange"
-        elif anomaly_detected:
-            status, color = "🟡 ANOMALIE", "yellow"
-        else:
-            status, color = "🟢 NORMAL", "lightgreen"
+# ===============================
+# TRAITEMENT VIDÉO
+# ===============================
+while cap.isOpened():
+    if stop_button:
+        break
 
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_placeholder.image(frame_rgb, channels="RGB")
+    ret, frame = cap.read()
+    if not ret:
+        break
 
-        info_placeholder.markdown(
-            f"""
-            <div class="status-box">
-                <h3>📊 État du système</h3>
-                <p><b>Statut :</b> <span style="color:{color}">{status}</span></p>
-                <p><b>Score anomalie :</b> {anomaly_score:.5f}</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    weapon_detected = False
 
-    cap.release()
+    # ---------------------------
+    # YOLO – Détection arme
+    # ---------------------------
+    if weapon_model:
+        results = weapon_model(frame, conf=0.4)
+        for r in results:
+            for box in r.boxes:
+                weapon_detected = True
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+
+    # ---------------------------
+    # Anomalie
+    # ---------------------------
+    anomaly_score = compute_anomaly_score(frame)
+    anomaly_detected = anomaly_score > 0.02
+
+    # ---------------------------
+    # Décision
+    # ---------------------------
+    if weapon_detected and anomaly_detected:
+        status, color = "🔴 MENACE CRITIQUE", "red"
+    elif weapon_detected:
+        status, color = "🟠 OBJET DANGEREUX", "orange"
+    elif anomaly_detected:
+        status, color = "🟡 ANOMALIE", "yellow"
+    else:
+        status, color = "🟢 NORMAL", "lightgreen"
+
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    frame_placeholder.image(frame_rgb, channels="RGB")
+
+    info_placeholder.markdown(
+        f"""
+        <div class="status-box">
+            <h3>📊 État du système</h3>
+            <p><b>Statut :</b> <span style="color:{color}">{status}</span></p>
+            <p><b>Score anomalie :</b> {anomaly_score:.5f}</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+cap.release()

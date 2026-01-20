@@ -1,8 +1,7 @@
-streamlit
-numpy
-torch
-torchvision
-ultralytics
-tensorflow-cpu
+ultralytics==8.1.0
 opencv-python-headless
+tensorflow==2.15.0
+torch
+numpy
+gradio
 Pillow

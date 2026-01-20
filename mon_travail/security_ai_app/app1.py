@@ -1,0 +1,139 @@
+# NOTE:
+# This environment variable resolves OpenMP runtime conflicts
+# when using PyTorch and TensorFlow together on Windows systems.
+# ===============================
+# Fix OpenMP conflict (PyTorch + TensorFlow on Windows)
+# ===============================
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+# ===============================
+# Imports
+# ===============================
+import streamlit as st
+import cv2
+import numpy as np
+import torch
+from ultralytics import YOLO
+from tensorflow.keras.models import load_model
+
+# =============================
+# CONFIGURATION PAGE
+# =============================
+st.set_page_config(
+    page_title="Intelligent Surveillance System",
+    page_icon="🛡️",
+    layout="wide"
+)
+
+# =============================
+# CHARGEMENT DES MODÈLES
+# =============================
+@st.cache_resource
+def load_models():
+    weapon_model = YOLO("models/yolov8_weapon.pt")  # modèle YOLOv8
+    anomaly_model = load_model("models/autoencoder_ucsd.h5", compile=False)  # autoencoder
+    return weapon_model, anomaly_model
+
+weapon_model, anomaly_model = load_models()
+
+# =============================
+# FONCTION SCORE D'ANOMALIE
+# =============================
+def compute_anomaly_score(frame, model):
+    """
+    Calcule un score d’anomalie basé sur l’erreur de reconstruction
+    """
+    frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    frame_resized = cv2.resize(frame_gray, (128, 128))
+    frame_norm = frame_resized / 255.0
+    frame_input = frame_norm.reshape(1, 128, 128, 1)
+
+    reconstructed = model.predict(frame_input, verbose=0)
+    mse = np.mean((frame_input - reconstructed) ** 2)
+    return mse
+
+# =============================
+# INTERFACE UTILISATEUR
+# =============================
+st.image("assets/logo.png", width=120)
+
+st.title("🛡️ Intelligent Video Surveillance System: AMANI KWETU")
+st.markdown("""
+**Securite dans la region des Grands Lacs (GOMA)**    
+Projet AMANI KWETU
+""")
+
+start = st.button("▶️ Démarrer la surveillance")
+stop = st.button("⏹️ Arrêter")
+
+frame_placeholder = st.empty()
+info_placeholder = st.empty()
+
+# =============================
+# CAPTURE WEBCAM
+# =============================
+if start:
+    cap = cv2.VideoCapture(0)
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret or stop:
+            break
+
+        # -------------------------
+        # DÉTECTION OBJETS DANGEREUX
+        # -------------------------
+        results = weapon_model(frame, conf=0.4)
+        weapon_detected = False
+
+        for r in results:
+            for box in r.boxes:
+                cls = int(box.cls[0])
+                weapon_detected = True
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                cv2.putText(frame, "Objet Dangereux",
+                            (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.6, (0, 0, 255), 2)
+
+        # -------------------------
+        # DÉTECTION ANOMALIE
+        # -------------------------
+        anomaly_score = compute_anomaly_score(frame, anomaly_model)
+        anomaly_detected = anomaly_score > 0.02  # seuil ajustable
+
+        # -------------------------
+        # FUSION DES DÉCISIONS
+        # -------------------------
+        if weapon_detected and anomaly_detected:
+            status = "🔴 MENACE CRITIQUE"
+            color = "red"
+        elif weapon_detected:
+            status = "🟠 OBJET DANGEREUX DÉTECTÉ"
+            color = "orange"
+        elif anomaly_detected:
+            status = "🟡 ANOMALIE COMPORTEMENTALE"
+            color = "yellow"
+        else:
+            status = "🟢 SITUATION NORMALE"
+            color = "green"
+
+        # -------------------------
+        # AFFICHAGE
+        # -------------------------
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_placeholder.image(frame_rgb, channels="RGB")
+
+        info_placeholder.markdown(
+            f"""
+            ### 📊 État du système
+            - **Statut :** <span style='color:{color}; font-weight:bold'>{status}</span>  
+            - **Score anomalie :** `{anomaly_score:.4f}`
+            """,
+            unsafe_allow_html=True
+        )
+
+    cap.release()
+    cv2.destroyAllWindows()
