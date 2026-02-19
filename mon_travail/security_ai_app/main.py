@@ -13,7 +13,7 @@ ANOMALY_THRESHOLD = float(os.getenv("ANOMALY_THRESHOLD", "0.02"))
 WEAPON_CONF_THRESHOLD = float(os.getenv("WEAPON_CONF_THRESHOLD", "0.4"))
 API_KEY = os.getenv("SECURITY_API_KEY")
 
-weapon_model = YOLO("models/yolov8_weapon.pt")
+weapon_model = YOLO("models/detection_model.pt")
 anomaly_model = load_model("models/autoencoder_ucsd.h5", compile=False)
 
 
