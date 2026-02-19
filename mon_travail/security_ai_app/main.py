@@ -67,6 +67,26 @@ def _risk_level(weapon_detected: bool, anomaly_detected: bool) -> str:
     return "normal"
 
 
+def _esp32_actions(risk_level: str) -> Dict[str, Any]:
+    if risk_level == "critical":
+        return {
+            "threat_detected": True,
+            "buzzer_on": True,
+            "display_message": "ALERTE ROUGE",
+        }
+    if risk_level in {"dangerous_object", "anomaly"}:
+        return {
+            "threat_detected": True,
+            "buzzer_on": True,
+            "display_message": "ALERTE",
+        }
+    return {
+        "threat_detected": False,
+        "buzzer_on": False,
+        "display_message": "Affichage normal",
+    }
+
+
 @app.post("/analyze_frame")
 async def analyze_frame(
     frame: UploadFile = File(...),
@@ -87,14 +107,19 @@ async def analyze_frame(
     weapon_detected = len(weapon_detections) > 0
     anomaly_detected = anomaly_score > ANOMALY_THRESHOLD
 
+    risk_level = _risk_level(weapon_detected, anomaly_detected)
+    esp32_actions = _esp32_actions(risk_level)
+
     return {
+        "system_state": "surveillance_active",
         "weapon_detected": weapon_detected,
         "weapon_count": len(weapon_detections),
         "weapon_detections": weapon_detections,
         "anomaly_score": anomaly_score,
         "anomaly_threshold": ANOMALY_THRESHOLD,
         "anomaly_detected": anomaly_detected,
-        "risk_level": _risk_level(weapon_detected, anomaly_detected),
+        "risk_level": risk_level,
+        **esp32_actions,
     }
 
 

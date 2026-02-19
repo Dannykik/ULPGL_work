@@ -165,3 +165,32 @@ curl -X POST "http://localhost:8000/analyze_frame" \
 ```
 
 Cette réponse JSON peut être affichée directement dans Streamlit pour déclencher les alertes selon `risk_level`.
+
+---
+
+## 🧩 Intégration de votre algorithme ESP32 (bouton + buzzer + écran)
+
+La logique de votre organigramme est maintenant reflétée dans le projet :
+
+1. **Appui long bouton** côté ESP32 → ON/OFF de la surveillance.
+2. Si ON : capture image périodique + envoi au serveur (`/analyze_frame`).
+3. Le serveur IA renvoie :
+   - `risk_level`
+   - `threat_detected`
+   - `buzzer_on`
+   - `display_message`
+4. L'ESP32 applique l'action :
+   - menace détectée → buzzer ON + écran ALERTE
+   - pas de menace → affichage normal + buzzer OFF
+
+### Fichier ESP32 ajouté
+
+- `esp32_cam_client/esp32_cam_client.ino`
+
+Ce sketch montre :
+- la détection d'appui long,
+- l'alternance **Système ON / OFF**,
+- l'envoi d'image au serveur FastAPI,
+- l'activation du buzzer selon la réponse IA.
+
+> Remarque : vous devez compléter la configuration `camera_config_t` selon votre carte ESP32-CAM (AI Thinker, etc.).
