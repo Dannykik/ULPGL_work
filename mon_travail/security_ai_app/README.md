@@ -66,3 +66,70 @@ L’interface graphique est développée avec **Streamlit** et permet :
 
 ## 📁 Structure du projet
 
+---
+
+## 🔗 Fusion des deux modèles avec une caméra ESP32
+
+Si vous voulez combiner votre **modèle de détection d'armes** et votre **autoencodeur d'anomalies** avec une caméra ESP32-CAM, vous pouvez utiliser l'architecture suivante (simple et réaliste pour un mémoire).
+
+### 1) Flux global recommandé
+
+1. **ESP32-CAM capture** des images (ou un flux MJPEG court).
+2. ESP32 envoie les frames au **serveur Python** (votre machine) via HTTP.
+3. Le serveur exécute en parallèle :
+   - le modèle **YOLO (arme)**
+   - le modèle **Autoencodeur (anomalie de scène)**
+4. Le serveur applique une logique de **fusion de décision**.
+5. Le système retourne :
+   - état `normal` / `anormal`
+   - présence d'arme (`oui/non` + classe)
+   - **niveau de risque** final (🟢🟡🟠🔴)
+6. En cas de risque élevé : envoi d'une **alerte** (email, Telegram, dashboard, etc.).
+
+### 2) Fusion de décision (règle simple)
+
+Vous pouvez démarrer avec ces règles :
+
+- `arme = 0` et `anomalie = 0` → **🟢 Normal**
+- `arme = 0` et `anomalie = 1` → **🟡 Anomalie comportementale**
+- `arme = 1` et `anomalie = 0` → **🟠 Objet dangereux**
+- `arme = 1` et `anomalie = 1` → **🔴 Menace critique**
+
+Ensuite, vous pouvez pondérer avec les scores (`confidence YOLO`, `MSE autoencodeur`) pour obtenir un risque continu.
+
+### 3) API minimale côté serveur
+
+Exposez une route comme :
+
+- `POST /analyze_frame`
+
+Entrée : image JPEG envoyée par ESP32.
+
+Sortie JSON (exemple) :
+
+```json
+{
+  "weapon_detected": true,
+  "weapon_class": "gun",
+  "weapon_conf": 0.91,
+  "anomaly_score": 0.037,
+  "anomaly_detected": true,
+  "risk_level": "critical"
+}
+```
+
+### 4) Conseils pratiques pour ESP32-CAM
+
+- Utiliser une résolution modérée (`QVGA` ou `VGA`) pour limiter la latence.
+- Envoyer 1 image toutes les 300–700 ms (au lieu de 30 FPS).
+- Ajouter une clé API simple dans le header HTTP pour sécuriser l'envoi.
+- Garder l'inférence sur votre machine (pas sur l'ESP32), car l'ESP32 est trop limité pour YOLO/autoencodeur.
+
+### 5) Architecture adaptée à votre mémoire (Région des Grands Lacs)
+
+- **Couche acquisition** : ESP32-CAM dans zones cibles.
+- **Couche analyse IA** : serveur local (YOLO + Autoencodeur + fusion).
+- **Couche supervision** : Streamlit + journal d'événements + alertes.
+- **Impact attendu** : détection précoce des menaces et appui à la sécurité communautaire.
+
+Cette architecture est progressive : vous pouvez d'abord valider sur webcam locale, puis remplacer la source vidéo par l'ESP32-CAM sans changer le cœur IA.
