@@ -38,7 +38,7 @@ _patch_torch_for_ultralytics()
 ANOMALY_THRESHOLD = float(os.getenv("ANOMALY_THRESHOLD", "0.02"))
 WEAPON_CONF_THRESHOLD = float(os.getenv("WEAPON_CONF_THRESHOLD", "0.4"))
 API_KEY = os.getenv("SECURITY_API_KEY")
-DETECTION_MODEL_PATH = os.getenv("DETECTION_MODEL_PATH", "models/yolov8_weapon.pt")
+DETECTION_MODEL_PATH = os.getenv("DETECTION_MODEL_PATH", "models/detection_model.pt")
 ANOMALY_MODEL_PATH = os.getenv("ANOMALY_MODEL_PATH", "models/autoencoder_ucsd.h5")
 
 if not os.path.exists(DETECTION_MODEL_PATH):

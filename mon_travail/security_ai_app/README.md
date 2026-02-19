@@ -155,7 +155,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 - `SECURITY_API_KEY` : clé API attendue dans le header `x-api-key`
 - `ANOMALY_THRESHOLD` : seuil anomalie (défaut `0.02`)
 - `WEAPON_CONF_THRESHOLD` : confiance minimale YOLO (défaut `0.4`)
-- `DETECTION_MODEL_PATH` : chemin du modèle de détection YOLO (défaut `models/yolov8_weapon.pt`)
+- `DETECTION_MODEL_PATH` : chemin du modèle de détection YOLO (défaut `models/detection_model.pt`)
 - `ANOMALY_MODEL_PATH` : chemin du modèle autoencodeur (défaut `models/autoencoder_ucsd.h5`)
 
 ### Exemple de requête (depuis PC/ESP32 gateway)
@@ -257,14 +257,14 @@ Vous pouvez lancer avec votre nouveau fichier sans modifier le code :
 
 ```bash
 # Linux/macOS
-export DETECTION_MODEL_PATH="models/mon_nouveau_modele.pt"
+export DETECTION_MODEL_PATH="models/detection_model.pt"
 export ANOMALY_MODEL_PATH="models/autoencoder_ucsd.h5"
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 ```powershell
 # Windows PowerShell
-$env:DETECTION_MODEL_PATH = "models/mon_nouveau_modele.pt"
+$env:DETECTION_MODEL_PATH = "models/detection_model.pt"
 $env:ANOMALY_MODEL_PATH = "models/autoencoder_ucsd.h5"
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
