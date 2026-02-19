@@ -5,3 +5,6 @@ torch
 numpy
 gradio
 Pillow
+fastapi
+uvicorn
+python-multipart

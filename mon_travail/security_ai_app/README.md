@@ -133,3 +133,35 @@ Sortie JSON (exemple) :
 - **Impact attendu** : détection précoce des menaces et appui à la sécurité communautaire.
 
 Cette architecture est progressive : vous pouvez d'abord valider sur webcam locale, puis remplacer la source vidéo par l'ESP32-CAM sans changer le cœur IA.
+
+---
+
+## 🚀 Suite réalisée : API prête pour ESP32-CAM
+
+Un serveur FastAPI est disponible dans `main.py` avec :
+
+- `GET /health` : test rapide de disponibilité
+- `POST /analyze_frame` : analyse d'une image envoyée (multipart)
+- `POST /predict` : alias de compatibilité
+
+### Lancer l'API
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+### Variables d'environnement utiles
+
+- `SECURITY_API_KEY` : clé API attendue dans le header `x-api-key`
+- `ANOMALY_THRESHOLD` : seuil anomalie (défaut `0.02`)
+- `WEAPON_CONF_THRESHOLD` : confiance minimale YOLO (défaut `0.4`)
+
+### Exemple de requête (depuis PC/ESP32 gateway)
+
+```bash
+curl -X POST "http://localhost:8000/analyze_frame" \
+  -H "x-api-key: VOTRE_CLE" \
+  -F "frame=@image.jpg"
+```
+
+Cette réponse JSON peut être affichée directement dans Streamlit pour déclencher les alertes selon `risk_level`.

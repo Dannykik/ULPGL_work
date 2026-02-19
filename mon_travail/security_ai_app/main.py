@@ -1,33 +1,103 @@
-from fastapi import FastAPI, Request
+import os
+from typing import Any, Dict, List, Optional
+
 import cv2
 import numpy as np
-from ultralytics import YOLO
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from tensorflow.keras.models import load_model
+from ultralytics import YOLO
 
-app = FastAPI()
+app = FastAPI(title="Security AI API", version="1.0.0")
+
+ANOMALY_THRESHOLD = float(os.getenv("ANOMALY_THRESHOLD", "0.02"))
+WEAPON_CONF_THRESHOLD = float(os.getenv("WEAPON_CONF_THRESHOLD", "0.4"))
+API_KEY = os.getenv("SECURITY_API_KEY")
 
 weapon_model = YOLO("models/yolov8_weapon.pt")
 anomaly_model = load_model("models/autoencoder_ucsd.h5", compile=False)
 
-@app.post("/predict")
-async def predict(request: Request):
-    data = await request.body()
-    np_img = np.frombuffer(data, np.uint8)
-    frame = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
 
-    # Détection
-    weapon = len(weapon_model(frame)[0].boxes) > 0
+@app.get("/health")
+def health() -> Dict[str, str]:
+    return {"status": "ok"}
 
-    # Anomalie
+
+def _check_api_key(x_api_key: Optional[str]) -> None:
+    if API_KEY and x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+
+def _compute_anomaly_score(frame: np.ndarray) -> float:
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    resized = cv2.resize(gray, (128, 128)) / 255.0
-    input_img = resized.reshape(1,128,128,1)
-    recon = anomaly_model.predict(input_img, verbose=0)
-    mse = np.mean((input_img - recon)**2)
+    resized = cv2.resize(gray, (128, 128)).astype("float32") / 255.0
+    input_img = resized.reshape(1, 128, 128, 1)
+    reconstructed = anomaly_model.predict(input_img, verbose=0)
+    mse = float(np.mean((input_img - reconstructed) ** 2))
+    return mse
 
-    if weapon and mse > 0.02:
-        return "ALERTE"
-    elif weapon or mse > 0.02:
-        return "SUSPECT"
-    else:
-        return "NORMAL"
+
+def _detect_weapons(frame: np.ndarray) -> List[Dict[str, Any]]:
+    detections: List[Dict[str, Any]] = []
+    results = weapon_model(frame, conf=WEAPON_CONF_THRESHOLD)
+
+    for result in results:
+        for box in result.boxes:
+            cls_id = int(box.cls[0])
+            conf = float(box.conf[0])
+            x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
+            detections.append(
+                {
+                    "class_id": cls_id,
+                    "class_name": result.names.get(cls_id, str(cls_id)),
+                    "confidence": conf,
+                    "bbox": [x1, y1, x2, y2],
+                }
+            )
+
+    return detections
+
+
+def _risk_level(weapon_detected: bool, anomaly_detected: bool) -> str:
+    if weapon_detected and anomaly_detected:
+        return "critical"
+    if weapon_detected:
+        return "dangerous_object"
+    if anomaly_detected:
+        return "anomaly"
+    return "normal"
+
+
+@app.post("/analyze_frame")
+async def analyze_frame(
+    frame: UploadFile = File(...),
+    x_api_key: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    _check_api_key(x_api_key)
+
+    raw = await frame.read()
+    np_img = np.frombuffer(raw, np.uint8)
+    decoded = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+
+    if decoded is None:
+        raise HTTPException(status_code=400, detail="Invalid image file")
+
+    weapon_detections = _detect_weapons(decoded)
+    anomaly_score = _compute_anomaly_score(decoded)
+
+    weapon_detected = len(weapon_detections) > 0
+    anomaly_detected = anomaly_score > ANOMALY_THRESHOLD
+
+    return {
+        "weapon_detected": weapon_detected,
+        "weapon_count": len(weapon_detections),
+        "weapon_detections": weapon_detections,
+        "anomaly_score": anomaly_score,
+        "anomaly_threshold": ANOMALY_THRESHOLD,
+        "anomaly_detected": anomaly_detected,
+        "risk_level": _risk_level(weapon_detected, anomaly_detected),
+    }
+
+
+@app.post("/predict")
+async def predict_legacy(frame: UploadFile = File(...), x_api_key: Optional[str] = Header(default=None)):
+    return await analyze_frame(frame=frame, x_api_key=x_api_key)
