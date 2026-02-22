@@ -19,6 +19,8 @@ const char* API_KEY = "VOTRE_CLE_API";
 // ==========================
 const int BUTTON_PIN = 12; // bouton poussoir (avec pull-up)
 const int BUZZER_PIN = 13;
+const int OLED_SDA_PIN = 14;
+const int OLED_SCL_PIN = 15;
 
 // OLED SSD1306 (I2C)
 const int OLED_WIDTH = 128;
@@ -38,7 +40,7 @@ unsigned long lastCaptureMs = 0;
 const unsigned long CAPTURE_INTERVAL_MS = 500;
 
 void initDisplay() {
-  Wire.begin();
+  Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
   oledAvailable = display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
   if (!oledAvailable) {
     Serial.println("OLED non detecte, fallback sur Serial.");
