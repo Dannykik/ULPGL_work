@@ -270,3 +270,31 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 Si le fichier n'existe pas, l'API arrête le démarrage avec un message explicite.
+
+
+### ⚠️ Dépannage FastAPI / Pydantic (`cannot import name Sentinel`)
+
+Si vous obtenez :
+`ImportError: cannot import name 'Sentinel' from 'typing_extensions'`
+
+mettez à jour les paquets dans l'environnement conda actif :
+
+```bash
+pip install --upgrade typing_extensions pydantic pydantic-core fastapi
+```
+
+Puis relancez :
+
+```bash
+python main.py
+# ou
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+Vous pouvez vérifier la version de `typing_extensions` :
+
+```bash
+python -c "import typing_extensions as t; print(t.__version__)"
+```
+
+La version recommandée est `>=4.12.2`.
