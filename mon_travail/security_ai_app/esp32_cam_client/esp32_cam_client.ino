@@ -121,7 +121,9 @@ void connectWifi() {
     Serial.print(".");
   }
   Serial.println("\nWi-Fi connecte");
-  setDisplayMessage("Wi-Fi connecte");
+  Serial.print("IP ESP32: ");
+  Serial.println(WiFi.localIP());
+  setDisplayMessage("Wi-Fi OK " + WiFi.localIP().toString());
 }
 
 bool sendFrameAndApplyDecision(camera_fb_t* fb) {
