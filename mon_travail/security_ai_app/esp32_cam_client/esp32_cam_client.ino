@@ -2,6 +2,9 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 // ==========================
 // Wi-Fi + API configuration
@@ -17,6 +20,13 @@ const char* API_KEY = "VOTRE_CLE_API";
 const int BUTTON_PIN = 12; // bouton poussoir (avec pull-up)
 const int BUZZER_PIN = 13;
 
+// OLED SSD1306 (I2C)
+const int OLED_WIDTH = 128;
+const int OLED_HEIGHT = 64;
+const int OLED_ADDR = 0x3C;
+Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
+bool oledAvailable = false;
+
 // Long press
 const unsigned long LONG_PRESS_MS = 1500;
 unsigned long buttonPressStart = 0;
@@ -27,9 +37,44 @@ bool surveillanceEnabled = false;
 unsigned long lastCaptureMs = 0;
 const unsigned long CAPTURE_INTERVAL_MS = 500;
 
+void initDisplay() {
+  Wire.begin();
+  oledAvailable = display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
+  if (!oledAvailable) {
+    Serial.println("OLED non detecte, fallback sur Serial.");
+    return;
+  }
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Security AI");
+  display.println("Initialisation...");
+  display.display();
+}
+
 void setDisplayMessage(const String& message) {
-  // Remplacer par votre écran OLED/LCD.
   Serial.println("[ECRAN] " + message);
+
+  if (!oledAvailable) {
+    return;
+  }
+
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.setTextSize(1);
+  display.println("Security AI");
+  display.println("----------------");
+
+  // Affichage simple sur 2 lignes utiles
+  if (message.length() <= 20) {
+    display.println(message);
+  } else {
+    display.println(message.substring(0, 20));
+    display.println(message.substring(20, min((int)message.length(), 40)));
+  }
+  display.display();
 }
 
 void setBuzzer(bool enabled) {
@@ -74,6 +119,7 @@ void connectWifi() {
     Serial.print(".");
   }
   Serial.println("\nWi-Fi connecte");
+  setDisplayMessage("Wi-Fi connecte");
 }
 
 bool sendFrameAndApplyDecision(camera_fb_t* fb) {
@@ -94,6 +140,7 @@ bool sendFrameAndApplyDecision(camera_fb_t* fb) {
   uint8_t* payload = (uint8_t*)malloc(totalLen);
   if (!payload) {
     Serial.println("Erreur memoire payload");
+    setDisplayMessage("Erreur memoire");
     http.end();
     return false;
   }
@@ -107,6 +154,7 @@ bool sendFrameAndApplyDecision(camera_fb_t* fb) {
 
   if (code <= 0) {
     Serial.printf("Erreur HTTP: %d\n", code);
+    setDisplayMessage("Erreur HTTP");
     http.end();
     return false;
   }
@@ -118,6 +166,7 @@ bool sendFrameAndApplyDecision(camera_fb_t* fb) {
   auto err = deserializeJson(doc, response);
   if (err) {
     Serial.println("JSON invalide");
+    setDisplayMessage("JSON invalide");
     return false;
   }
 
@@ -135,6 +184,8 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(BUZZER_PIN, OUTPUT);
   setBuzzer(false);
+
+  initDisplay();
 
   // IMPORTANT: ajouter ici votre configuration camera ESP32-CAM (pins + init)
   // camera_config_t config = ...
@@ -161,6 +212,7 @@ void loop() {
   camera_fb_t* fb = esp_camera_fb_get();
   if (!fb) {
     Serial.println("Capture echouee");
+    setDisplayMessage("Capture echouee");
     return;
   }
 
