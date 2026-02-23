@@ -48,7 +48,7 @@ if not os.path.exists(DETECTION_MODEL_PATH):
 ANOMALY_MODEL_PATH = os.getenv("ANOMALY_MODEL_PATH", "models/autoencoder_ucsd.h5")
 HUMAN_MODEL_PATH = os.getenv("HUMAN_MODEL_PATH", "models/yolov8n.pt")
 KNIFE_MODEL_PATH = os.getenv("KNIFE_MODEL_PATH", "models/yolov8s.pt")
-ESP32_CAM_URL = os.getenv("ESP32_CAM_URL", "http://10.184.45.207:81/stream")
+CAMERA_STREAM_URL = os.getenv("CAMERA_STREAM_URL", "http://127.0.0.1:8000/stream")
 SAVE_DIR = os.getenv("SAVE_DIR", "saved_events")
 os.makedirs(SAVE_DIR, exist_ok=True)
 
@@ -157,7 +157,7 @@ def _risk_level(weapon_detected: bool, anomaly_detected: bool, human_detected: b
     return "normal"
 
 
-def _esp32_actions(risk_level: str) -> Dict[str, Any]:
+def _alert_actions(risk_level: str) -> Dict[str, Any]:
     if risk_level == "critical":
         return {"threat_detected": True, "buzzer_on": True, "display_message": "ALERTE ROUGE"}
     if risk_level == "human_intrusion":
@@ -272,7 +272,7 @@ async def analyze_frame(
         "human_count": len(human_detections),
         "human_detections": human_detections,
         "risk_level": risk_level,
-        **_esp32_actions(risk_level),
+        **_alert_actions(risk_level),
     }
 
 
@@ -284,7 +284,7 @@ async def predict_legacy(frame: UploadFile = File(...), x_api_key: Optional[str]
 @app.get("/camera_feed")
 def camera_feed() -> Response:
     try:
-        response = requests.get(ESP32_CAM_URL, stream=True, timeout=5)
+        response = requests.get(CAMERA_STREAM_URL, stream=True, timeout=5)
         return StreamingResponse(response.raw, media_type="multipart/x-mixed-replace; boundary=frame")
     except Exception as exc:
         return JSONResponse(status_code=500, content={"error": str(exc)})
