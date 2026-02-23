@@ -10,7 +10,7 @@ import numpy as np
 import requests
 import torch
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from tensorflow.keras.models import load_model
 from ultralytics import YOLO
 
@@ -282,7 +282,7 @@ async def predict_legacy(frame: UploadFile = File(...), x_api_key: Optional[str]
 
 
 @app.get("/camera_feed")
-def camera_feed() -> StreamingResponse | JSONResponse:
+def camera_feed() -> Response:
     try:
         response = requests.get(ESP32_CAM_URL, stream=True, timeout=5)
         return StreamingResponse(response.raw, media_type="multipart/x-mixed-replace; boundary=frame")
