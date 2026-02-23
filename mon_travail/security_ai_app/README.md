@@ -298,3 +298,25 @@ python -c "import typing_extensions as t; print(t.__version__)"
 ```
 
 La version recommandée est `>=4.12.2`.
+
+### Nouvelle application de surveillance (sans ESP32)
+
+Si vous souhaitez utiliser uniquement la caméra de l'appareil (ordinateur/téléphone), lancez :
+
+```bash
+uvicorn surveillance_app:app --host 0.0.0.0 --port 8500
+```
+
+Puis ouvrez :
+
+- `http://localhost:8500` sur PC
+- `http://IP_DE_VOTRE_PC:8500` sur téléphone (même Wi-Fi)
+
+Fonctionnalités disponibles dans l'interface :
+
+- activation/arrêt vidéo,
+- sélection caméra,
+- enregistrement vidéo (export `.webm`),
+- capture image,
+- suivi de mouvement,
+- journal des événements.
