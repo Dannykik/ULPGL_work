@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-
-app = FastAPI(title="Smart Surveillance App", version="2.0.0")
 
 BASE_DIR = Path(__file__).resolve().parent
 RECORDINGS_DIR = BASE_DIR / "recordings"
@@ -47,9 +46,13 @@ def init_db() -> None:
         )
 
 
-@app.on_event("startup")
-def startup() -> None:
+@asynccontextmanager
+async def lifespan(_: FastAPI):
     init_db()
+    yield
+
+
+app = FastAPI(title="Smart Surveillance App", version="2.0.1", lifespan=lifespan)
 
 
 def log_event(event_type: str, details: str = "") -> None:
@@ -419,3 +422,9 @@ def list_recordings(limit: int = 100) -> Dict[str, List[Dict[str, Any]]]:
 @app.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "ok", "app": "surveillance", "database": str(DB_PATH)}
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("surveillance_app:app", host="0.0.0.0", port=8500, reload=False)
