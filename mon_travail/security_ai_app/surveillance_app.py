@@ -301,10 +301,18 @@ async function toggleTracking() {{
   await loadEvents();
 }}
 
+let lastAI = 0;
+
 function drawLoop() {{
   if (!stream) return;
   ctx.clearRect(0, 0, overlay.width, overlay.height);
   if (trackingEnabled) detectMotion();
+
+  const now = Date.now();
+  if (now - lastAI > 1500) {{ // 1.5 secondes
+      sendFrameForDetection();
+      lastAI = now;
+  }}
   animationId = requestAnimationFrame(drawLoop);
 }}
 
@@ -365,10 +373,134 @@ document.getElementById('trackBtn').onclick = async () => {{
 document.getElementById('snapshotBtn').onclick = snapshot;
 document.getElementById('refreshDbBtn').onclick = loadEvents;
 
-navigator.mediaDevices.getUserMedia({{ video: true, audio: false }})
-  .then(s => {{ s.getTracks().forEach(t => t.stop()); return listCameras(); }})
-  .then(loadEvents)
-  .catch(() => log('Autorise la caméra dans le navigateur pour continuer.'));
+if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {{
+    navigator.mediaDevices.getUserMedia({{ video: true, audio: false }})
+        .then(s => {{s.getTracks().forEach(t => t.stop()); return listCameras(); }})
+        .then(loadEvents)
+        .catch(err => log('Erreur caméra: ' + err.message));
+}} else {{
+    log('Votre navigateur ne supporte pas getUserMedia. Essayez Chrome, Firefox ou Edge récent.');
+    setBadge(cameraStatus, 'Caméra non supportée', 'danger');
+}};
+
+async function sendFrameForDetection() {{
+    if (!video.videoWidth) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctxTemp = canvas.getContext("2d");
+    ctxTemp.drawImage(video, 0, 0);
+
+    const blob = await new Promise(resolve =>
+        canvas.toBlob(resolve, "image/jpeg", 0.8)
+    );
+
+    const formData = new FormData();
+    formData.append("frame", blob, "frame.jpg");
+
+    const response = await fetch("http://127.0.0.1:8000/analyze_frame", {{
+        method: "POST",
+        body: formData
+    }});
+
+    const data = await response.json();
+
+    drawFullDetection(data);
+}}
+function drawFullDetection(data) {{
+    if (!data) return;
+
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+    // 1️⃣ Dessin des détections (armes + humains)
+    const detections = [
+        ...(data.weapon_detections || []),
+        ...(data.human_detections || [])
+    ];
+
+    detections.forEach(det => {{
+        const [x1, y1, x2, y2] = det.bbox;
+
+        let color = "#00ff00";
+
+        if (det.class_name.toLowerCase() === "person") {{
+            color = "#ff0000"; // rouge pour humain
+        }} else if (det.class_name.toLowerCase() === "knife") {{
+            color = "#ffaa00"; // orange pour couteau
+        }}
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+        ctx.fillStyle = color;
+        ctx.font = "16px Arial";
+        ctx.fillText(
+            `${{det.class_name}} (${{(det.confidence * 100).toFixed(1)}}%)`,
+            x1,
+            y1 - 5
+        );
+    }});
+
+    // 2️⃣ Score anomalie
+    if (data.anomaly_score !== undefined) {{
+        ctx.fillStyle = "#00ffff";
+        ctx.font = "18px Arial";
+        ctx.fillText(
+            `Anomalie: ${{data.anomaly_score.toFixed(6)}}`,
+            20,
+            overlay.height - 20
+        );
+    }}
+
+    // 3️⃣ Gestion du niveau de risque
+    let riskColor = "#00ff00";
+    let riskText = "NORMAL";
+
+    switch (data.risk_level) {{
+        case "critical":
+            riskColor = "#ff0000";
+            riskText = "🚨 CRITIQUE";
+            break;
+
+        case "human_intrusion":
+            riskColor = "#ff8800";
+            riskText = "⚠ INTRUSION HUMAINE";
+            break;
+
+        case "dangerous_object":
+            riskColor = "#ffcc00";
+            riskText = "⚠ OBJET DANGEREUX";
+            break;
+
+        case "anomaly":
+            riskColor = "#00ffff";
+            riskText = "⚠ ANOMALIE";
+            break;
+
+        default:
+            riskColor = "#00ff00";
+            riskText = "NORMAL";
+    }}
+
+    ctx.fillStyle = riskColor;
+    ctx.font = "bold 28px Arial";
+    ctx.fillText(riskText, 20, 40);
+
+    // 4️⃣ Message IA (vient de _alert_actions)
+    if (data.display_message) {{
+        ctx.fillStyle = riskColor;
+        ctx.font = "bold 22px Arial";
+        ctx.fillText(data.display_message, 20, 75);
+    }}
+
+    // 5️⃣ Etat critique
+    if (data.threat_detected) {{
+        log("⚠ " + data.display_message);
+    }}
+}}
 </script>
 </body></html>
 """

@@ -13,7 +13,7 @@ from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from tensorflow.keras.models import load_model
 from ultralytics import YOLO
-
+from fastapi.middleware.cors import CORSMiddleware
 
 def _patch_torch_for_ultralytics() -> None:
     """Compatibilité PyTorch 2.6+ pour charger des checkpoints YOLO legacy."""
@@ -45,7 +45,7 @@ DETECTION_MODEL_PATH = os.getenv("DETECTION_MODEL_PATH", "models/detection_model
 if not os.path.exists(DETECTION_MODEL_PATH):
     DETECTION_MODEL_PATH = os.getenv("FALLBACK_DETECTION_MODEL_PATH", "models/yolov8_weapon.pt")
 
-ANOMALY_MODEL_PATH = os.getenv("ANOMALY_MODEL_PATH", "models/autoencoder_ucsd.h5")
+ANOMALY_MODEL_PATH = os.getenv("ANOMALY_MODEL_PATH", "models/autoencoder_ucsd.keras")
 HUMAN_MODEL_PATH = os.getenv("HUMAN_MODEL_PATH", "models/yolov8n.pt")
 KNIFE_MODEL_PATH = os.getenv("KNIFE_MODEL_PATH", "models/yolov8s.pt")
 CAMERA_STREAM_URL = os.getenv("CAMERA_STREAM_URL", "http://127.0.0.1:8000/stream")
@@ -60,6 +60,13 @@ if not os.path.exists(ANOMALY_MODEL_PATH):
 
 app = FastAPI(title="Security AI API", version="2.1.0")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # en production mets ton domaine
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def _load_yolo_model(path: str, model_name: str) -> Optional[YOLO]:
     if not os.path.exists(path):
